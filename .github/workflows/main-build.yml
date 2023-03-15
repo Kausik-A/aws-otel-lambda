@@ -106,7 +106,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.INTEG_TEST_LAMBDA_ROLE_ARN }}
           role-duration-seconds: 1200
-          aws-region: us-east-1
+          aws-region: us-west-2
       - name: Patch ADOT
         run: ./patch-upstream.sh
       # Login to ECR since may be needed for Python build image.
