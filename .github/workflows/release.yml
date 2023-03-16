@@ -9,7 +9,7 @@ on:
       languages:
         description: 'The languages layer that are to be release.'
         required: true
-        default: "[ \"aws-otel-java-wrapper\", \"aws-otel-go-wrapper\","aws-otel-python-wrapper","aws-otel-java-agent","aws-otel-nodejs-wrapper"]"
+        default: "[ \"aws-otel-java-wrapper\", \"aws-otel-go-wrapper\",\"aws-otel-python-wrapper\",\"aws-otel-java-agent\",\"aws-otel-nodejs-wrapper"\]"
       layer_arn_keyword:
         description: 'Clone layer from keyword ARN by substituting architecture parameter (ie: arn:aws:lambda:us-east-1:012345678912:layer:aws-otel-nodejs-wrapper-<ARCHITECTURE>-d8b20954c3284abcd08f5fb8178986a89cff7160:1)'
         required: true
