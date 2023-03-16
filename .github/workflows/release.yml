@@ -60,9 +60,9 @@ jobs:
           role-to-assume: ${{ secrets.INTEG_TEST_LAMBDA_ROLE_ARN }}
           role-duration-seconds: 1200
           aws-region: us-east-1
-      - name: Get layer ARN by substituting `${{ matrix.architecture }}` , `${{ matrix.language }}` & `${{ matrix.languages }}` into Soak Test ARN keyword
+      - name: Get layer ARN by substituting `${{ matrix.architecture }}` , `${{ matrix.languages }}` & `${{ matrix.languages }}` into Soak Test ARN keyword
         run: |
-          echo LAYER_ARN=$(echo ${{ env.LAYER_ARN_KEYWORD }} | sed 's/<ARCHITECTURE>/${{ matrix.architecture }}/') | sed 's/<LANGUAGE>/${{ matrix.language }}/') | sed 's/<COMMIT_SHA>/${{ github.event.inputs.LAYER_ARN_KEYWORD }}/') |tee --append $GITHUB_ENV
+          echo LAYER_ARN=$(echo ${{ env.LAYER_ARN_KEYWORD }} | sed 's/<ARCHITECTURE>/${{ matrix.architecture }}/') | sed 's/<LANGUAGE>/${{ matrix.languages }}/') | sed 's/<COMMIT_SHA>/${{ github.event.inputs.LAYER_ARN_KEYWORD }}/') |tee --append $GITHUB_ENV
       - name: Get layer name by substituting `${{ matrix.architecture }}` into Workflow Input name keyword
         run: |
           export $(xargs < VERSIONS.env)
