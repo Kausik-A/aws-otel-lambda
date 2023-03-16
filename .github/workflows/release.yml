@@ -3,6 +3,13 @@ name: Release public Lambda layer
 on:
   workflow_dispatch:
     inputs:
+      release_SHA:
+        description: 'Commit SHA of aws-otel-lambda that is being released'
+        required: true
+      languages:
+        description: 'The languages layer that are to be release.'
+        required: true
+        default: "[ \"aws-otel-java-wrapper\", \"aws-otel-go-wrapper\","aws-otel-python-wrapper","aws-otel-java-agent","aws-otel-nodejs-wrapper"]"
       layer_arn_keyword:
         description: 'Clone layer from keyword ARN by substituting architecture parameter (ie: arn:aws:lambda:us-east-1:012345678912:layer:aws-otel-nodejs-wrapper-<ARCHITECTURE>-d8b20954c3284abcd08f5fb8178986a89cff7160:1)'
         required: true
@@ -25,6 +32,7 @@ on:
 
 env:
   AMP_REGIONS: us-west-2,us-east-1,us-east-2,eu-central-1,eu-west-1
+  LAYER_ARN_KEYWORD: arn:aws:lambda:us-east-1:611364707713:layer:<LANGUAGE>-<ARCHITECTURE>-<COMMIT_SHA>
 
 permissions:
   id-token: write
@@ -44,21 +52,27 @@ jobs:
       matrix:
         architecture: ${{ fromJson(github.event.inputs.architecture) }}
         aws_region: ${{ fromJson(github.event.inputs.aws_region) }}
+        languages: ${{ fromJson(github.event.inputs.languages) }}
     steps:
+      - uses: actions/checkout@v3
       - uses: aws-actions/configure-aws-credentials@v1-node16
         with:
           role-to-assume: ${{ secrets.INTEG_TEST_LAMBDA_ROLE_ARN }}
           role-duration-seconds: 1200
           aws-region: us-east-1
-      - name: Get layer ARN by substituting `${{ matrix.architecture }}` into Soak Test ARN keyword
+      - name: Get layer ARN by substituting `${{ matrix.architecture }}` , `${{ matrix.language }}` & `${{ matrix.languages }}` into Soak Test ARN keyword
         run: |
-          echo LAYER_ARN=$(echo "${{ github.event.inputs.layer_arn_keyword }}" | sed 's/<ARCHITECTURE>/${{ matrix.architecture }}/') | tee --append $GITHUB_ENV
+          echo LAYER_ARN=$(echo ${{ env.LAYER_ARN_KEYWORD }} | sed 's/<ARCHITECTURE>/${{ matrix.architecture }}/') | sed 's/<LANGUAGE>/${{ matrix.language }}/') | sed 's/<COMMIT_SHA>/${{ github.event.inputs.LAYER_ARN_KEYWORD }}/') |tee --append $GITHUB_ENV
       - name: Get layer name by substituting `${{ matrix.architecture }}` into Workflow Input name keyword
         run: |
-          echo LAYER_NAME=$(echo "${{ github.event.inputs.layer_name_keyword }}" | sed 's/<ARCHITECTURE>/${{ matrix.architecture }}/') | tee --append $GITHUB_ENV
+          export $(xargs < VERSIONS.env)
+          echo LAYER_NAME=$(echo "$" | sed 's/<ARCHITECTURE>/${{ matrix.architecture }}/') | tee --append $GITHUB_ENV
       - name: Get layer kind by parsing `${{ github.event.inputs.layer_name_keyword }}`
         run: |
-          echo LAYER_KIND=$(echo "${{ github.event.inputs.layer_name_keyword }}" | cut -d - -f 3) | tee --append $GITHUB_ENV
+          echo LAYER_KIND=$(echo "${{ matrix.language }}" | cut -d - -f 3) | tee --append $GITHUB_ENV
+      - name: Check if the soak test layer exists
+        run: |
+          aws lambda list-layer-versions --layer-name 'ADOT26' --region us-west-2 --query 'max_by(LayerVersions, &Version).LayerVersionArn'
       - name: download layer from source
         run: |
           URL=$(aws lambda get-layer-version-by-arn --arn ${{ env.LAYER_ARN }} --query Content.Location --output text)
