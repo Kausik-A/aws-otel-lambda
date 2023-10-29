@@ -15,6 +15,8 @@
 
 package lambdacomponents
 
+//github.com/aws-observability/aws-otel-lambda/adot/collector/lambdacomponents
+
 import (
 	"testing"
 
@@ -22,7 +24,7 @@ import (
 )
 
 const (
-	exportersCount  = 7
+	exportersCount  = 6
 	receiversCount  = 1
 	extensionsCount = 1
 )
@@ -40,7 +42,6 @@ func TestComponents(t *testing.T) {
 	assert.NotNil(t, exporters["otlp"])
 	assert.NotNil(t, exporters["otlphttp"])
 	// other exporters
-	assert.NotNil(t, exporters["prometheus"])
 	assert.NotNil(t, exporters["prometheusremotewrite"])
 
 	receivers := factories.Receivers

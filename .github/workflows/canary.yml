@@ -62,17 +62,18 @@ jobs:
             sample-app: okhttp
             instrumentation-type: agent
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
         with:
-          go-version: '^1.19.6'
+          go-version: '~1.21.3'
+          check-latest: true
       - uses: actions/setup-java@v3
         if: ${{ matrix.language == 'java' }}
         with:
           distribution: corretto
-          java-version: '11'
+          java-version: '17'
       - name: Cache (Java)
         uses: actions/cache@v3
         if: ${{ matrix.language == 'java' }}
@@ -119,12 +120,12 @@ jobs:
       - name: Patch ADOT
         run: ./patch-upstream.sh
       - name: Build functions
-        run: GOARCH=${{ matrix.architecture }} ./build.sh
+        run: GOARCH=${{ matrix.architecture }} ./build.sh ${{ matrix.architecture }}
         working-directory: ${{ matrix.language }}
-      - uses: aws-actions/configure-aws-credentials@v1-node16
+      - uses: aws-actions/configure-aws-credentials@v4.0.0
         with:
           role-to-assume: ${{ secrets.INTEG_TEST_LAMBDA_ROLE_ARN }}
-          role-duration-seconds: 1200
+          role-duration-seconds: 7200
           aws-region: ${{ matrix.aws_region }}
       - name: Get terraform directory
         run: |
@@ -158,7 +159,7 @@ jobs:
       - name: Send request to endpoint
         run: curl -sS ${{ steps.extract-endpoint.outputs.stdout }}
       - name: Checkout test framework
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: aws-observability/aws-otel-test-framework
           path: test-framework
@@ -184,6 +185,8 @@ jobs:
         if: always()
         run: terraform destroy -auto-approve
         working-directory: ${{ env.TERRAFORM_DIRECTORY }}
+        env:
+          TF_VAR_architecture: ${{ env.LAMBDA_FUNCTION_ARCH }}
   publish-canary-status:
     needs: [canary-test]
     if: ${{ always() }}

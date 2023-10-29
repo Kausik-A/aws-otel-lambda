@@ -19,14 +19,28 @@ java {
 
 spotless {
     java {
-        googleJavaFormat("1.9")
+        googleJavaFormat("1.15.0")
     }
 }
 
+val javaagentDependency by configurations.creating {
+    extendsFrom()
+}
+
 dependencies {
-    compileOnly(platform("io.opentelemetry:opentelemetry-bom:1.22.0"))
-    compileOnly(platform("io.opentelemetry:opentelemetry-bom-alpha:1.22.0-alpha"))
+    compileOnly(platform("io.opentelemetry:opentelemetry-bom:1.30.0"))
+    compileOnly(platform("io.opentelemetry:opentelemetry-bom-alpha:1.30.0-alpha"))
     // Already included in wrapper so compileOnly
     compileOnly("io.opentelemetry:opentelemetry-sdk-extension-autoconfigure-spi")
     compileOnly("io.opentelemetry:opentelemetry-sdk-extension-aws")
+    javaagentDependency("software.amazon.opentelemetry:aws-opentelemetry-agent:1.30.0-adot-lambda1")
+}
+
+tasks.register<Copy>("download") {
+    from(javaagentDependency)
+    into("$buildDir/javaagent")
+}
+
+tasks.named("build") {
+    dependsOn("download")
 }

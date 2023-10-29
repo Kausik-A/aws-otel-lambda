@@ -45,7 +45,7 @@ jobs:
         architecture: ${{ fromJson(github.event.inputs.architecture) }}
         aws_region: ${{ fromJson(github.event.inputs.aws_region) }}
     steps:
-      - uses: aws-actions/configure-aws-credentials@v1-node16
+      - uses: aws-actions/configure-aws-credentials@v4.0.0
         with:
           role-to-assume: ${{ secrets.INTEG_TEST_LAMBDA_ROLE_ARN }}
           role-duration-seconds: 1200
@@ -64,7 +64,7 @@ jobs:
           URL=$(aws lambda get-layer-version-by-arn --arn ${{ env.LAYER_ARN }} --query Content.Location --output text)
           curl $URL -o layer.zip
       # switch to prod
-      - uses: aws-actions/configure-aws-credentials@v1-node16
+      - uses: aws-actions/configure-aws-credentials@v4.0.0
         with:
           role-to-assume: ${{ secrets.PROD_LAMBDA_ROLE_ARN }}
           role-duration-seconds: 1200
@@ -211,14 +211,14 @@ jobs:
             TEST_INSTR_TYPE="wrapper"
           fi
           echo TEST_INSTR_TYPE=$TEST_INSTR_TYPE | tee --append $GITHUB_ENV
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: actions/setup-java@v3
         if: ${{ env.TEST_LANGUAGE == 'java' }}
         with:
           distribution: corretto
-          java-version: '11'
+          java-version: '17'
       - name: Cache (Java)
         uses: actions/cache@v3
         if: ${{ env.TEST_LANGUAGE == 'java' }}
@@ -266,13 +266,14 @@ jobs:
       #   with:
       #     dotnet-version: '3.1.x'
       - name: Use Go Language
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         # NOTE: (enowell) In case the languages below need to build the
         # collector, and because building the collector requires go 1.18 and
         # above, always setup go 1.18.
         # if: ${{ env.TEST_LANGUAGE == 'go' }}
         with:
-          go-version: '^1.19.6'
+          go-version: '~1.21.3'
+          check-latest: true
       - name: download layer tf file
         uses: actions/download-artifact@v3
         with:
@@ -292,9 +293,9 @@ jobs:
         # Also, we NEED the architecture value because some apps (like .NET and
         # Go) depend on this architecture value.
       - name: Build functions
-        run: GOARCH=${{ matrix.architecture }} ./build.sh
+        run: GOARCH=${{ matrix.architecture }} ./build.sh ${{ matrix.architecture }}
         working-directory: ${{ env.TEST_LANGUAGE }}
-      - uses: aws-actions/configure-aws-credentials@v1-node16
+      - uses: aws-actions/configure-aws-credentials@v4.0.0
         with:
           role-to-assume: ${{ secrets.INTEG_TEST_LAMBDA_ROLE_ARN }}
           role-duration-seconds: 1200
@@ -327,7 +328,7 @@ jobs:
       - name: Send request to endpoint
         run: curl -sS ${{ steps.extract-endpoint.outputs.stdout }}
       - name: Checkout test framework
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: aws-observability/aws-otel-test-framework
           path: test-framework
@@ -346,3 +347,5 @@ jobs:
         if: always()
         run: terraform destroy -auto-approve
         working-directory: ${{ env.TERRAFORM_DIRECTORY }}
+        env:
+          TF_VAR_architecture: ${{ env.LAMBDA_FUNCTION_ARCH }}

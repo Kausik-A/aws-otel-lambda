@@ -62,17 +62,18 @@ jobs:
       java-agent-version: ${{ steps.set-sdk-layer-version-output.outputs.java-agent-version }}
       java-wrapper-version: ${{ steps.set-sdk-layer-version-output.outputs.java-wrapper-version }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
         with:
-          go-version: '^1.19.6'
+          go-version: '~1.21.3'
+          check-latest: true
       - uses: actions/setup-java@v3
         if: ${{ matrix.language == 'java' }}
         with:
           distribution: corretto
-          java-version: '11'
+          java-version: '17'
       - name: Cache (Java)
         uses: actions/cache@v3
         if: ${{ matrix.language == 'java' }}
@@ -126,7 +127,7 @@ jobs:
         if: ${{ matrix.language == 'dotnet' }}
         with:
           dotnet-version: '6.0.405'
-      - uses: aws-actions/configure-aws-credentials@v1-node16
+      - uses: aws-actions/configure-aws-credentials@v4.0.0
         with:
           role-to-assume: ${{ secrets.INTEG_TEST_LAMBDA_ROLE_ARN }}
           mask-aws-account-id: false
@@ -137,11 +138,11 @@ jobs:
         run: ./patch-upstream.sh
       # Login to ECR since may be needed for Python build image.
       - name: Login to Public ECR
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: public.ecr.aws
       - name: Build layers / functions
-        run: GOARCH=${{ matrix.architecture }} ./build.sh
+        run: GOARCH=${{ matrix.architecture }} ./build.sh ${{ matrix.architecture }}
         working-directory: ${{ matrix.language }}
       - name: Get Lambda Layer `amd64` architecture value
         if: ${{ matrix.architecture == 'amd64' }}
@@ -191,12 +192,12 @@ jobs:
       - name: Extract SDK layer arn
         id: extract-sdk-layer-arn
         if: ${{ matrix.language != 'dotnet' && matrix.language != 'go' }}
-        run: terraform output -raw sdk-layer-arn
+        run: terraform output -raw sdk_layer_arn
         working-directory: ${{ env.TERRAFORM_DIRECTORY }}
       - name: Extract Collector layer arn
         id: extract-collector-layer-arn
         if: ${{ matrix.language == 'dotnet' || matrix.language == 'go' }}
-        run: terraform output -raw collector-layer-arn
+        run: terraform output -raw collector_layer_arn
         working-directory: ${{ env.TERRAFORM_DIRECTORY }}
           # NOTE: (enowell) `terraform output` outputs additional text we are
           # not interested in because the `hashicorp/setup-terraform@v1` has a
@@ -223,7 +224,7 @@ jobs:
       - name: Send request to endpoint
         run: curl -sS ${{ steps.extract-endpoint.outputs.stdout }}
       - name: Checkout test framework
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: aws-observability/aws-otel-test-framework
           path: test-framework
@@ -261,16 +262,18 @@ jobs:
         run: echo "${{ matrix.language }}-${{ matrix.instrumentation-type }}-error=FAILED" >> $GITHUB_OUTPUT
       - name: Remove sdk layers from terraform management to prevent deletion.
         if: ${{ matrix.language != 'go' }}
-        run:  terraform state rm module.test.aws_lambda_layer_version.sdk_layer
+        run:  terraform state rm aws_lambda_layer_version.sdk_layer
         working-directory: ${{ env.TERRAFORM_DIRECTORY }}
       - name: Remove collector layers from terraform management to prevent deletion.
         if: ${{ matrix.language == 'go' }}
-        run: terraform state rm module.test.aws_lambda_layer_version.collector_layer
+        run: terraform state rm aws_lambda_layer_version.collector_layer
         working-directory: ${{ env.TERRAFORM_DIRECTORY }}
       - name: Destroy terraform
         if: always()
         run: terraform destroy -auto-approve
         working-directory: ${{ env.TERRAFORM_DIRECTORY }}
+        env:
+          TF_VAR_architecture: ${{ env.LAMBDA_FUNCTION_ARCH }}
   output-keywords:
     if: ${{ always() }}
     name: Output (${{ matrix.language }}, ${{ matrix.instrumentation-type }}) Layer Keyword

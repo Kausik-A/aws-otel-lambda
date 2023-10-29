@@ -30,6 +30,7 @@ jobs:
         language: [ dotnet, go, java, nodejs, python ]
         sample-app: [ aws-sdk ]
         instrumentation-type: [ wrapper ]
+        confmap: ["noop"]
         include:
           - language: java
             sample-app: aws-sdk
@@ -40,6 +41,36 @@ jobs:
             instrumentation-type: agent
             architecture: arm64
           - language: java
+            sample-app: aws-sdk
+            instrumentation-type: agent-confmap
+            architecture: amd64
+            confmap: s3
+          - language: java
+            sample-app: aws-sdk
+            instrumentation-type: agent-confmap
+            architecture: arm64
+            confmap: s3
+          - language: java
+            sample-app: aws-sdk
+            instrumentation-type: agent-confmap
+            architecture: amd64
+            confmap: http
+          - language: java
+            sample-app: aws-sdk
+            instrumentation-type: agent-confmap
+            architecture: arm64
+            confmap: http
+          - language: java
+            sample-app: aws-sdk
+            instrumentation-type: agent-confmap
+            architecture: amd64
+            confmap: https
+          - language: java
+            sample-app: aws-sdk
+            instrumentation-type: agent-confmap
+            architecture: arm64
+            confmap: https
+          - language: java
             sample-app: okhttp
             instrumentation-type: wrapper
             architecture: amd64
@@ -48,17 +79,18 @@ jobs:
             instrumentation-type: wrapper
             architecture: arm64
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
         with:
-          go-version: '^1.19.6'
+          go-version: '~1.21.3'
+          check-latest: true
       - uses: actions/setup-java@v3
         if: ${{ matrix.language == 'java' }}
         with:
           distribution: corretto
-          java-version: '11'
+          java-version: '17'
       - name: Cache (Java)
         uses: actions/cache@v3
         if: ${{ matrix.language == 'java' }}
@@ -102,20 +134,20 @@ jobs:
         if: ${{ matrix.language == 'dotnet' }}
         with:
           dotnet-version: '6.0.405'
-      - uses: aws-actions/configure-aws-credentials@v1-node16
+      - uses: aws-actions/configure-aws-credentials@v4.0.0
         with:
           role-to-assume: ${{ secrets.INTEG_TEST_LAMBDA_ROLE_ARN }}
-          role-duration-seconds: 1200
+          role-duration-seconds: 7200
           aws-region: us-east-1
       - name: Patch ADOT
         run: ./patch-upstream.sh
       # Login to ECR since may be needed for Python build image.
       - name: Login to Public ECR
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: public.ecr.aws
       - name: Build layers / functions
-        run: GOARCH=${{ matrix.architecture }} ./build.sh
+        run: GOARCH=${{ matrix.architecture }} ./build.sh ${{ matrix.architecture }}
         working-directory: ${{ matrix.language }}
       - name: Get Lambda Layer amd64 architecture value
         if: ${{ matrix.architecture == 'amd64' }}
@@ -133,7 +165,7 @@ jobs:
         working-directory: ${{ env.TERRAFORM_DIRECTORY }}
       - name: Get terraform Lambda function name
         run: |
-          echo TERRAFORM_LAMBDA_FUNCTION_NAME=lambda-${{ matrix.language }}-${{ matrix.sample-app }}-${{ matrix.instrumentation-type }}-${{ matrix.architecture }}-${{ github.run_id }} |
+          echo TERRAFORM_LAMBDA_FUNCTION_NAME=lambda-${{ matrix.language }}-${{ matrix.sample-app }}-${{ matrix.instrumentation-type }}-${{ matrix.confmap }}-${{ matrix.architecture }}-${{ github.run_id }} |
           tee --append $GITHUB_ENV
       - name: Apply terraform
         run: terraform apply -auto-approve
@@ -142,19 +174,20 @@ jobs:
           TF_VAR_sdk_layer_name: opentelemetry-${{ matrix.language }}-${{ matrix.sample-app }}-${{ matrix.instrumentation-type }}-${{ matrix.architecture }}-${{ github.run_id }}
           TF_VAR_function_name: ${{ env.TERRAFORM_LAMBDA_FUNCTION_NAME }}
           TF_VAR_architecture: ${{ env.LAMBDA_FUNCTION_ARCH }}
+          TF_VAR_configuration_source: ${{ matrix.confmap }}
       - name: Extract endpoint
         id: extract-endpoint
         run: terraform output -raw api-gateway-url
         working-directory: ${{ env.TERRAFORM_DIRECTORY }}
       - name: Extract AMP endpoint
         id: extract-amp-endpoint
-        if: ${{ matrix.language == 'java' && matrix.sample-app == 'aws-sdk' && matrix.instrumentation-type == 'agent' }}
+        if: ${{ matrix.language == 'java' && matrix.sample-app == 'aws-sdk' && startsWith(matrix.instrumentation-type, 'agent') }}
         run: terraform output -raw amp_endpoint
         working-directory: ${{ env.TERRAFORM_DIRECTORY }}
       - name: Extract SDK layer arn
         id: extract-sdk-layer-arn
         if: ${{ matrix.language != 'dotnet' && matrix.language != 'go' }}
-        run: terraform output -raw sdk-layer-arn
+        run: terraform output -raw sdk_layer_arn
         working-directory: ${{ env.TERRAFORM_DIRECTORY }}
       - name: Output annotations
         if: ${{ matrix.language != 'dotnet' && matrix.language != 'go' }}
@@ -164,7 +197,7 @@ jobs:
       - name: Send request to endpoint
         run: curl -sS ${{ steps.extract-endpoint.outputs.stdout }}
       - name: Checkout test framework
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: aws-observability/aws-otel-test-framework
           path: test-framework
@@ -175,7 +208,7 @@ jobs:
           cd test-framework
           ./gradlew :validator:run --args="-c default-lambda-validation.yml --endpoint ${{ steps.extract-endpoint.outputs.stdout }} --region $AWS_REGION"
       - name: validate java agent metric sample
-        if: ${{ matrix.language == 'java' && matrix.sample-app == 'aws-sdk' && matrix.instrumentation-type == 'agent' }}
+        if: ${{ matrix.language == 'java' && matrix.sample-app == 'aws-sdk' && startsWith(matrix.instrumentation-type, 'agent') }}
         run: |
           cp adot/utils/expected-templates/${{ matrix.language }}-${{ matrix.sample-app }}-${{ matrix.instrumentation-type }}-metric.json \
              test-framework/validator/src/main/resources/expected-data-template/ampExpectedMetric.mustache
@@ -185,6 +218,8 @@ jobs:
         if: always()
         run: terraform destroy -auto-approve
         working-directory: ${{ env.TERRAFORM_DIRECTORY }}
+        env:
+          TF_VAR_architecture: ${{ env.LAMBDA_FUNCTION_ARCH }}
   publish-build-status:
     needs: [integration-test]
     if: ${{ always() }}

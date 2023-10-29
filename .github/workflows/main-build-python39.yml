@@ -7,12 +7,12 @@ on:
       - release/*
     paths-ignore:
       - '.github/**'
-      - '!.github/workflows/main-build-python38.yml'
+      - '!.github/workflows/main-build-python39.yml'
       - '**.md'
   workflow_dispatch:
 
 concurrency:
-  group: main-build-python38-${{ github.ref_name }}
+  group: main-build-python39-${{ github.ref_name }}
   cancel-in-progress: true
 
 
@@ -22,31 +22,44 @@ permissions:
 jobs:
   integration-test:
     runs-on: ubuntu-20.04
-    name: Python38-${{ matrix.architecture }}-IntegrationTest
+    name: Python39-${{ matrix.architecture }}-IntegrationTest
     strategy:
       fail-fast: false
       matrix:
         architecture: [ amd64, arm64 ]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
         with:
-          go-version: '^1.19.6'
-      - uses: aws-actions/configure-aws-credentials@v1-node16
+          go-version: '~1.21.3'
+          check-latest: true
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Cache (Python)
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      - uses: aws-actions/configure-aws-credentials@v4.0.0
         with:
           role-to-assume: ${{ secrets.INTEG_TEST_LAMBDA_ROLE_ARN }}
-          role-duration-seconds: 1200
+          role-duration-seconds: 7200
           aws-region: us-east-1
       - name: Patch ADOT
         run: ./patch-upstream.sh
       - name: Login to Public ECR
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: public.ecr.aws
       - name: Build layers / functions
-        run: GOARCH=${{ matrix.architecture }} ./build.sh
+        run: GOARCH=${{ matrix.architecture }} ./build.sh ${{ matrix.architecture }}
         working-directory: python
       - name: Get Lambda Layer amd64 architecture value
         if: ${{ matrix.architecture == 'amd64' }}
@@ -73,14 +86,14 @@ jobs:
           TF_VAR_sdk_layer_name: opentelemetry-python-aws-sdk-wrapper-${{ matrix.architecture }}
           TF_VAR_function_name: ${{ env.TERRAFORM_LAMBDA_FUNCTION_NAME }}
           TF_VAR_architecture: ${{ env.LAMBDA_FUNCTION_ARCH }}
-          TF_VAR_runtime: 'python3.8'
+          TF_VAR_runtime: 'python3.9'
       - name: Extract endpoint
         id: extract-endpoint
         run: terraform output -raw api-gateway-url
         working-directory: ${{ env.TERRAFORM_DIRECTORY }}
       - name: Extract SDK layer arn
         id: extract-sdk-layer-arn
-        run: terraform output -raw sdk-layer-arn
+        run: terraform output -raw sdk_layer_arn
         working-directory: ${{ env.TERRAFORM_DIRECTORY }}
       - name: Output annotations
         run: |
@@ -89,7 +102,7 @@ jobs:
       - name: Send request to endpoint
         run: curl -sS ${{ steps.extract-endpoint.outputs.stdout }}
       - name: Checkout test framework
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: aws-observability/aws-otel-test-framework
           path: test-framework
@@ -103,3 +116,5 @@ jobs:
         if: always()
         run: terraform destroy -auto-approve
         working-directory: ${{ env.TERRAFORM_DIRECTORY }}
+        env:
+          TF_VAR_architecture: ${{ env.LAMBDA_FUNCTION_ARCH }}
