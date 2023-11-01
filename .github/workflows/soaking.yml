@@ -298,13 +298,21 @@ jobs:
             ' || echo false
           )
           [[ $AT_LEAST_ONE_LAYER_SOAK_TEST_FAILED == false ]]
-      - name: Output keyword for (${{ matrix.language }}, ${{ matrix.instrumentation-type }}) layer
+      - uses: aws-actions/configure-aws-credentials@v4.0.0
+        with:
+          role-to-assume: ${{ secrets.INTEG_TEST_LAMBDA_ROLE_ARN }}
+          mask-aws-account-id: false
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+          # Default session duration is 1 hour with OIDC.
+          role-duration-seconds: 14400 # 4 hours
+      - name: Output keyword for (${{ matrix.language }}, ${{ matrix.instrumentation-type }}) layer and save in cache
         run: |
           VERSION=$(
             echo '${{ toJSON(needs.soaking-test.outputs) }}' |
             jq -r '."${{ matrix.language }}-${{ matrix.instrumentation-type }}-version"'
           )
           echo "::warning::Layer ARN Keyword: arn:aws:lambda:${{ env.AWS_DEFAULT_REGION }}:611364707713:layer:aws-otel-${{ matrix.language }}-${{ matrix.instrumentation-type }}-<ARCHITECTURE>-${{ github.sha }}:$VERSION"
+          aws dynamodb put-item --table-name aws-otel-lambda-soak-tests --item '{"SHA-SDK": {"S": "aws-otel-${{ matrix.language }}-${{ matrix.instrumentation-type }}-<ARCHITECTURE>-${{ github.sha }}"}, "ARN": {"S": "arn:aws:lambda:${{ env.AWS_DEFAULT_REGION }}:611364707713:layer:aws-otel-${{ matrix.language }}-${{ matrix.instrumentation-type }}-<ARCHITECTURE>-${{ github.sha }}:$VERSION"}}'
 
   publish-soaking-status:
     needs: [soaking-test]
