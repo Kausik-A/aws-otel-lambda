@@ -314,16 +314,16 @@ jobs:
           echo "::warning::Layer ARN Keyword: arn:aws:lambda:${{ env.AWS_DEFAULT_REGION }}:611364707713:layer:aws-otel-${{ matrix.language }}-${{ matrix.instrumentation-type }}-${{ github.sha }}:$VERSION"
           aws dynamodb put-item --table-name aws-otel-lambda-soak-tests --item '{"SHA-SDK": {"S": "aws-otel-${{ matrix.language }}-${{ matrix.instrumentation-type }}-<ARCHITECTURE>-${{ github.sha }}"}, "ARN": {"S": "arn:aws:lambda:${{ env.AWS_DEFAULT_REGION }}:611364707713:layer:aws-otel-${{ matrix.language }}-${{ matrix.instrumentation-type }}-<ARCHITECTURE>-${{ github.sha }}:${{ VERSION }}"}}'
 
-  publish-soaking-status:
-    needs: [soaking-test]
-    if: ${{ always() }}
-    uses: ./.github/workflows/publish-status.yml
-    with:
-      namespace: 'ADOT/GitHubActions'
-      repository: ${{ github.repository }}
-      branch: ${{ github.ref_name }}
-      workflow: soaking
-      success: ${{ needs.soaking-test.result == 'success' }}
-      region: us-west-2
-    secrets:
-      roleArn: ${{ secrets.METRICS_ROLE_ARN }}
+#  publish-soaking-status:
+#    needs: [soaking-test]
+#    if: ${{ always() }}
+#    uses: ./.github/workflows/publish-status.yml
+#    with:
+#      namespace: 'ADOT/GitHubActions'
+#      repository: ${{ github.repository }}
+#      branch: ${{ github.ref_name }}
+#      workflow: soaking
+#      success: ${{ needs.soaking-test.result == 'success' }}
+#      region: us-west-2
+#    secrets:
+#      roleArn: ${{ secrets.METRICS_ROLE_ARN }}
