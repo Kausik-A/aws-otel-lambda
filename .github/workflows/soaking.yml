@@ -307,10 +307,10 @@ jobs:
           role-duration-seconds: 14400 # 4 hours
       - name: Output keyword for (${{ matrix.language }}, ${{ matrix.instrumentation-type }}) layer and save in cache
         run: |
-          VERSION=$(
+          echo "VERSION=$(
             echo '${{ toJSON(needs.soaking-test.outputs) }}' |
             jq -r '."${{ matrix.language }}-${{ matrix.instrumentation-type }}-version"'
-          )
+          )" >> $GITHUB_ENV
           echo "::warning::Layer ARN Keyword: arn:aws:lambda:${{ env.AWS_DEFAULT_REGION }}:611364707713:layer:aws-otel-${{ matrix.language }}-${{ matrix.instrumentation-type }}-${{ github.sha }}:$VERSION"
           aws dynamodb put-item --table-name aws-otel-lambda-soak-tests --item '{"SHA-SDK": {"S": "aws-otel-${{ matrix.language }}-${{ matrix.instrumentation-type }}-<ARCHITECTURE>-${{ github.sha }}"}, "ARN": {"S": "arn:aws:lambda:${{ env.AWS_DEFAULT_REGION }}:611364707713:layer:aws-otel-${{ matrix.language }}-${{ matrix.instrumentation-type }}-<ARCHITECTURE>-${{ github.sha }}:${{ env.VERSION }}"}}'
 
